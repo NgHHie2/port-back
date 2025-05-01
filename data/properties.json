@@ -1,0 +1,23 @@
+{
+  "nextId": 4,
+  "properties": [
+    {
+      "id": 3,
+      "name": "Nguyễn Hoàng Hiệp",
+      "address": "Kiến An",
+      "price": "2,2 tỉ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T17:56:20.692Z",
+      "updated_at": "2025-05-01T17:56:20.693Z"
+    },
+    {
+      "id": 2,
+      "name": "Gia Lâm Hà Nội",
+      "address": "nhà đất 25m2, hướng Đông",
+      "price": "2,5 tỷ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T17:56:10.658Z",
+      "updated_at": "2025-05-01T17:56:10.659Z"
+    }
+  ]
+}

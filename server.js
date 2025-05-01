@@ -4,36 +4,40 @@ const bodyParser = require("body-parser");
 const path = require("path");
 const fs = require("fs");
 const { Worker } = require("worker_threads");
-const { connectDB, sequelize } = require("./config/db");
-const Property = require("./models/Property");
-const Email = require("./models/Email");
+const {
+  ensureDataDirectoryExists,
+  Properties,
+  Emails,
+} = require("./data/dataHandler");
 
 require("dotenv").config();
 
 const app = express();
 
-// Đảm bảo các thư mục cần thiết tồn tại
+// Ensure directories exist
 function ensureDirectoriesExist() {
   const directories = [
     path.join(__dirname, "workers"),
     path.join(__dirname, "public"),
+    path.join(__dirname, "data"),
   ];
 
   directories.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`Đã tạo thư mục: ${dir}`);
+      console.log(`Created directory: ${dir}`);
     }
   });
 }
 
-// Tạo thư mục
+// Create directories and initialize data files
 ensureDirectoriesExist();
+ensureDataDirectoryExists();
 
 // Middleware
 app.use(
   cors({
-    origin: "*", // Cho phép tất cả các origin (sửa lại nếu cần)
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -42,23 +46,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Kết nối database
-connectDB();
-
-// Khởi tạo worker để xử lý email thông báo dự án mới trong thread riêng biệt
+// Create worker for sending email notifications
 const createEmailWorker = (propertyId) => {
   return new Promise((resolve, reject) => {
-    // Tạo một worker mới từ file emailWorker.js
     const worker = new Worker("./workers/emailWorker.js", {
       workerData: {
         propertyId,
-        dbConfig: {
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          database: process.env.DB_NAME,
-        },
         emailConfig: {
           host: process.env.EMAIL_HOST,
           port: process.env.EMAIL_PORT,
@@ -68,19 +61,16 @@ const createEmailWorker = (propertyId) => {
       },
     });
 
-    // Lắng nghe kết quả từ worker
     worker.on("message", (message) => {
       console.log(`Worker message: ${message}`);
       resolve(message);
     });
 
-    // Xử lý lỗi từ worker
     worker.on("error", (error) => {
       console.error("Worker error:", error);
       reject(error);
     });
 
-    // Xử lý khi worker hoàn thành
     worker.on("exit", (code) => {
       if (code !== 0) {
         reject(new Error(`Worker stopped with exit code ${code}`));
@@ -91,20 +81,12 @@ const createEmailWorker = (propertyId) => {
   });
 };
 
-// Worker để gửi email liên hệ
+// Worker for handling contact form submissions
 const createContactWorker = (contactData) => {
   return new Promise((resolve, reject) => {
-    // Tạo một worker mới từ file contactWorker.js
     const worker = new Worker("./workers/contactWorker.js", {
       workerData: {
         contactData,
-        dbConfig: {
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          database: process.env.DB_NAME,
-        },
         emailConfig: {
           host: process.env.EMAIL_HOST,
           port: process.env.EMAIL_PORT,
@@ -115,19 +97,16 @@ const createContactWorker = (contactData) => {
       },
     });
 
-    // Lắng nghe kết quả từ worker
     worker.on("message", (message) => {
       console.log(`Contact worker message: ${message}`);
       resolve(message);
     });
 
-    // Xử lý lỗi từ worker
     worker.on("error", (error) => {
       console.error("Contact worker error:", error);
       reject(error);
     });
 
-    // Xử lý khi worker hoàn thành
     worker.on("exit", (code) => {
       if (code !== 0) {
         reject(new Error(`Contact worker stopped with exit code ${code}`));
@@ -138,7 +117,7 @@ const createContactWorker = (contactData) => {
   });
 };
 
-// Middleware kiểm tra mã xác nhận
+// Middleware to verify admin confirmation code
 const verifyConfirmCode = (req, res, next) => {
   const { confirmCode } = req.body;
 
@@ -150,36 +129,33 @@ const verifyConfirmCode = (req, res, next) => {
     return res.status(403).json({ message: "Mã xác nhận không đúng" });
   }
 
-  // Mã xác nhận đúng, tiếp tục xử lý
   next();
 };
 
-// Routes API cho properties
+// Routes API for properties
 app.get("/api/properties", async (req, res) => {
   try {
-    const properties = await Property.findAll({
-      order: [["created_at", "DESC"]], // Sắp xếp theo thời gian tạo, mới nhất lên đầu
-    });
+    const properties = Properties.findAll();
     res.json(properties);
   } catch (error) {
-    console.error("Lỗi khi lấy danh sách bất động sản:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error getting properties list:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 app.get("/api/properties/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const property = await Property.findByPk(id);
+    const property = Properties.findById(id);
 
     if (!property) {
-      return res.status(404).json({ message: "Không tìm thấy bất động sản" });
+      return res.status(404).json({ message: "Property not found" });
     }
 
     res.json(property);
   } catch (error) {
-    console.error("Lỗi khi lấy thông tin bất động sản:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error getting property info:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -188,30 +164,30 @@ app.post("/api/properties", verifyConfirmCode, async (req, res) => {
     const { name, address, price, image_url } = req.body;
 
     if (!name || !address || !price) {
-      return res.status(400).json({ message: "Thiếu thông tin bắt buộc" });
+      return res.status(400).json({ message: "Missing required information" });
     }
 
-    const newProperty = await Property.create({
+    const newProperty = Properties.create({
       name,
       address,
       price,
       image_url,
     });
 
-    // Tạo worker thread mới để xử lý việc gửi email
-    // Không chặn luồng chính API
+    // Create worker thread to send notification emails
+    // Won't block the main API thread
     createEmailWorker(newProperty.id)
       .then((result) => {
-        console.log(`Kết quả gửi email: ${result}`);
+        console.log(`Email sending result: ${result}`);
       })
       .catch((error) => {
-        console.error("Lỗi khi gửi email thông báo:", error);
+        console.error("Error sending notification email:", error);
       });
 
     res.status(201).json(newProperty);
   } catch (error) {
-    console.error("Lỗi khi thêm bất động sản:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error adding property:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -220,116 +196,113 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
     const { id } = req.params;
     const { name, address, price, image_url } = req.body;
 
-    const property = await Property.findByPk(id);
-
-    if (!property) {
-      return res.status(404).json({ message: "Không tìm thấy bất động sản" });
-    }
-
-    await property.update({
-      name: name || property.name,
-      address: address || property.address,
-      price: price || property.price,
-      image_url: image_url || property.image_url,
+    const updatedProperty = Properties.update(id, {
+      name,
+      address,
+      price,
+      image_url,
     });
 
-    res.json(property);
+    if (!updatedProperty) {
+      return res.status(404).json({ message: "Property not found" });
+    }
+
+    res.json(updatedProperty);
   } catch (error) {
-    console.error("Lỗi khi cập nhật bất động sản:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error updating property:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 app.delete("/api/properties/:id", verifyConfirmCode, async (req, res) => {
   try {
     const { id } = req.params;
+    const result = Properties.delete(id);
 
-    const property = await Property.findByPk(id);
-
-    if (!property) {
-      return res.status(404).json({ message: "Không tìm thấy bất động sản" });
+    if (!result) {
+      return res.status(404).json({ message: "Property not found" });
     }
 
-    await property.destroy();
-
-    res.json({ message: "Xóa bất động sản thành công" });
+    res.json({ message: "Property deleted successfully" });
   } catch (error) {
-    console.error("Lỗi khi xóa bất động sản:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error deleting property:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// API cho email đăng ký
+// API for email subscriptions
 app.post("/api/subscribe", async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email là bắt buộc" });
+      return res.status(400).json({ message: "Email is required" });
     }
 
-    // Kiểm tra email đã tồn tại chưa và tạo mới nếu chưa có
-    const [newEmail, created] = await Email.findOrCreate({
-      where: { email },
-      defaults: { email },
-    });
+    const result = Emails.create(email);
 
-    if (!created) {
-      return res.status(400).json({ message: "Email đã đăng ký" });
+    if (!result.created) {
+      return res.status(400).json({ message: "Email already subscribed" });
     }
 
-    res.status(201).json({ message: "Đăng ký nhận tin thành công" });
+    res.status(201).json({ message: "Subscription successful" });
   } catch (error) {
-    console.error("Lỗi khi đăng ký email:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error subscribing email:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// API cho form liên hệ
+// API for emails list
+app.get("/api/emails", async (req, res) => {
+  try {
+    const emails = Emails.findAll();
+    res.json(emails);
+  } catch (error) {
+    console.error("Error getting emails list:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// API for contact form
 app.post("/api/contact", async (req, res) => {
   try {
     const { email, name, phone, message } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email là bắt buộc" });
+      return res.status(400).json({ message: "Email is required" });
     }
 
-    // Lưu email vào database (nếu chưa có)
-    await Email.findOrCreate({ where: { email } });
+    // Store email in subscribers if not already present
+    Emails.create(email);
 
-    // Tạo worker thread để gửi email thông báo liên hệ mới
+    // Create worker thread to send contact notification
     createContactWorker({ email, name, phone, message })
       .then((result) => {
-        console.log(`Kết quả gửi email liên hệ: ${result}`);
+        console.log(`Contact email result: ${result}`);
       })
       .catch((error) => {
-        console.error("Lỗi khi gửi email thông báo liên hệ:", error);
+        console.error("Error sending contact notification:", error);
       });
 
-    res.status(200).json({ message: "Gửi thông tin liên hệ thành công" });
+    res.status(200).json({ message: "Contact information sent successfully" });
   } catch (error) {
-    console.error("Lỗi khi gửi thông tin liên hệ:", error);
-    res.status(500).json({ message: "Lỗi server" });
+    console.error("Error sending contact info:", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// Serve trang admin
+// Serve admin page
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
-// Đường dẫn mặc định
+// Default route
 app.get("/", (req, res) => {
   res.send("API server is running. Access /admin to manage properties.");
 });
 
-// Sync models với database
-sequelize.sync({ alter: true }).then(() => {
-  console.log("Database đã được đồng bộ hóa");
-});
-
-// Khởi động server
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server đang chạy trên cổng ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

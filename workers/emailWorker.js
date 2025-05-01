@@ -1,54 +1,59 @@
 const { workerData, parentPort } = require("worker_threads");
-const mysql = require("mysql2/promise");
 const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
 
-// Lấy dữ liệu từ thread chính
-const { propertyId, dbConfig, emailConfig } = workerData;
+// Get data from main thread
+const { propertyId, emailConfig } = workerData;
 
-// Hàm chính để gửi email
-async function sendPropertyNotificationEmails() {
-  let connection;
+// Define paths for data files
+const DATA_DIR = path.join(__dirname, "..", "data");
+const PROPERTIES_FILE = path.join(DATA_DIR, "properties.json");
+const EMAILS_FILE = path.join(DATA_DIR, "emails.json");
 
+// Read data from file
+function readData(filePath) {
   try {
-    // Kết nối đến database
-    connection = await mysql.createConnection({
-      host: dbConfig.host,
-      port: dbConfig.port,
-      user: dbConfig.user,
-      password: dbConfig.password,
-      database: dbConfig.database,
-    });
-
+    const data = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(data);
+  } catch (error) {
     parentPort.postMessage(
-      `Đã kết nối database để xử lý property ID: ${propertyId}`
+      `Error reading data from ${filePath}: ${error.message}`
+    );
+    throw error;
+  }
+}
+
+// Main function to send property notification emails
+async function sendPropertyNotificationEmails() {
+  try {
+    parentPort.postMessage(`Processing property ID: ${propertyId}`);
+
+    // Get property information
+    const propertiesData = readData(PROPERTIES_FILE);
+    const property = propertiesData.properties.find(
+      (p) => p.id === parseInt(propertyId)
     );
 
-    // Lấy thông tin dự án
-    const [propertyRows] = await connection.execute(
-      "SELECT * FROM properties WHERE id = ?",
-      [propertyId]
-    );
-
-    if (propertyRows.length === 0) {
-      parentPort.postMessage(`Không tìm thấy dự án với ID: ${propertyId}`);
+    if (!property) {
+      parentPort.postMessage(`Property not found with ID: ${propertyId}`);
       return;
     }
 
-    const property = propertyRows[0];
+    // Get email subscribers
+    const emailsData = readData(EMAILS_FILE);
+    const subscribers = emailsData.emails;
 
-    // Lấy danh sách email đăng ký
-    const [emailRows] = await connection.execute("SELECT email FROM emails");
-
-    if (emailRows.length === 0) {
-      parentPort.postMessage("Không có email nào đăng ký nhận tin");
+    if (subscribers.length === 0) {
+      parentPort.postMessage("No email subscribers found");
       return;
     }
 
     parentPort.postMessage(
-      `Chuẩn bị gửi email cho ${emailRows.length} người đăng ký`
+      `Preparing to send email to ${subscribers.length} subscribers`
     );
 
-    // Tạo transporter để gửi email
+    // Create transporter for sending emails
     const transporter = nodemailer.createTransport({
       host: emailConfig.host,
       port: emailConfig.port,
@@ -59,59 +64,59 @@ async function sendPropertyNotificationEmails() {
       },
     });
 
-    // Phân chia email thành các nhóm nhỏ để gửi
-    const chunkSize = 50; // Mỗi lần gửi tối đa 50 email
+    // Split emails into small groups for sending
+    const chunkSize = 50; // Send max 50 emails at once
     let successCount = 0;
     let failCount = 0;
 
-    // Chia emails thành các nhóm nhỏ
-    for (let i = 0; i < emailRows.length; i += chunkSize) {
-      const chunk = emailRows.slice(i, i + chunkSize);
-      const emails = chunk.map((row) => row.email).join(",");
+    // Split emails into groups
+    for (let i = 0; i < subscribers.length; i += chunkSize) {
+      const chunk = subscribers.slice(i, i + chunkSize);
+      const emails = chunk.map((sub) => sub.email).join(",");
 
       try {
-        // Tạo nội dung email
+        // Create email content
         const mailOptions = {
           from: `"Hòa Nguyễn BĐS" <${emailConfig.user}>`,
-          bcc: emails, // Sử dụng BCC để ẩn danh sách email người nhận
-          subject: `Dự án mới: ${property.name}`,
+          bcc: emails, // Use BCC to hide recipient list
+          subject: `New project: ${property.name}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #0053a6;">Dự án mới vừa được cập nhật</h2>
-              <p>Liên hệ để nhận thông tin chi tiết: <strong>0946 314286</strong></p>
+              <h2 style="color: #0053a6;">New project has been updated</h2>
+              <p>Contact for more details: <strong>0946 314286</strong></p>
               <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
                 <h3 style="color: #ff6b35; margin-top: 0;">${property.name}</h3>
-                <p><strong>Địa chỉ:</strong> ${property.address}</p>
-                <p><strong>Giá:</strong> ${property.price}</p>
+                <p><strong>Address:</strong> ${property.address}</p>
+                <p><strong>Price:</strong> ${property.price}</p>
                 ${
                   property.image_url
                     ? `<img src="${property.image_url}" alt="${property.name}" style="max-width: 100%; height: auto; margin: 10px 0;">`
                     : ""
                 }
               </div>
-              <p style="font-size: 12px; color: #666; margin-top: 30px;">Email này được gửi tự động. Vui lòng không trả lời.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 30px;">This is an automated email. Please do not reply.</p>
             </div>
           `,
         };
 
-        // Gửi email
+        // Send email
         await transporter.sendMail(mailOptions);
         successCount += chunk.length;
 
         parentPort.postMessage(
-          `Đã gửi email cho nhóm ${Math.ceil(i / chunkSize) + 1}/${Math.ceil(
-            emailRows.length / chunkSize
+          `Sent email to group ${Math.ceil(i / chunkSize) + 1}/${Math.ceil(
+            subscribers.length / chunkSize
           )}`
         );
 
-        // Chờ một chút giữa các lần gửi để tránh quá tải
-        if (i + chunkSize < emailRows.length) {
+        // Wait a bit between sends to avoid overloading
+        if (i + chunkSize < subscribers.length) {
           await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (error) {
         failCount += chunk.length;
         parentPort.postMessage(
-          `Lỗi khi gửi email cho nhóm ${Math.ceil(i / chunkSize) + 1}: ${
+          `Error sending email to group ${Math.ceil(i / chunkSize) + 1}: ${
             error.message
           }`
         );
@@ -119,19 +124,14 @@ async function sendPropertyNotificationEmails() {
     }
 
     parentPort.postMessage(
-      `Hoàn thành gửi email: Thành công: ${successCount}, Thất bại: ${failCount}`
+      `Email sending complete: Success: ${successCount}, Failed: ${failCount}`
     );
   } catch (error) {
-    parentPort.postMessage(`Lỗi trong worker: ${error.message}`);
-  } finally {
-    // Đóng kết nối database
-    if (connection) {
-      await connection.end();
-    }
+    parentPort.postMessage(`Error in worker: ${error.message}`);
   }
 }
 
-// Bắt đầu quy trình gửi email
+// Start the email sending process
 sendPropertyNotificationEmails().catch((error) => {
-  parentPort.postMessage(`Lỗi không xử lý được: ${error.message}`);
+  parentPort.postMessage(`Unhandled error: ${error.message}`);
 });
