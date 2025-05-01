@@ -6,6 +6,12 @@ const DATABASE_URL = process.env.DATABASE_URL;
 // Create a postgres.js client with proper SSL configuration
 const sql = postgres(DATABASE_URL, { ssl: "verify-full" });
 
+// Function to create a new postgres connection
+// This is useful for workers which need their own connection
+const createSqlConnection = () => {
+  return postgres(DATABASE_URL, { ssl: "verify-full" });
+};
+
 // Test the connection
 async function testConnection() {
   try {
@@ -53,36 +59,7 @@ async function initDB() {
 
 module.exports = {
   sql,
-  testConnection,
-  initDB,
-};
-
-// Test the connection
-async function testConnection() {
-  try {
-    await sequelize.authenticate();
-    console.log("Database connection has been established successfully.");
-    return true;
-  } catch (error) {
-    console.error("Unable to connect to the database:", error);
-    return false;
-  }
-}
-
-// Initialize the database
-async function initDB() {
-  try {
-    // Sync all models
-    await sequelize.sync();
-    console.log("Database synchronized successfully");
-  } catch (error) {
-    console.error("Error initializing database:", error);
-    throw error;
-  }
-}
-
-module.exports = {
-  sequelize,
+  createSqlConnection,
   testConnection,
   initDB,
 };
