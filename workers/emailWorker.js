@@ -1,39 +1,93 @@
 const { workerData, parentPort } = require("worker_threads");
 const nodemailer = require("nodemailer");
-const fs = require("fs");
-const path = require("path");
+const { Sequelize } = require("sequelize");
+require("dotenv").config();
 
 // Get data from main thread
 const { propertyId, emailConfig } = workerData;
 
-// Define paths for data files
-const DATA_DIR = path.join(__dirname, "..", "data");
-const PROPERTIES_FILE = path.join(DATA_DIR, "properties.json");
-const EMAILS_FILE = path.join(DATA_DIR, "emails.json");
+// Create Sequelize instance for the worker
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "postgres",
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+  },
+  logging: false,
+});
 
-// Read data from file
-function readData(filePath) {
-  try {
-    const data = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(data);
-  } catch (error) {
-    parentPort.postMessage(
-      `Error reading data from ${filePath}: ${error.message}`
-    );
-    throw error;
+// Define the models for the worker
+const Property = sequelize.define(
+  "Property",
+  {
+    id: {
+      type: Sequelize.DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    name: {
+      type: Sequelize.DataTypes.STRING,
+      allowNull: false,
+    },
+    address: {
+      type: Sequelize.DataTypes.TEXT,
+      allowNull: false,
+    },
+    price: {
+      type: Sequelize.DataTypes.STRING,
+      allowNull: false,
+    },
+    image_url: {
+      type: Sequelize.DataTypes.STRING,
+      allowNull: true,
+    },
+  },
+  {
+    tableName: "properties",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
   }
-}
+);
+
+const Email = sequelize.define(
+  "Email",
+  {
+    id: {
+      type: Sequelize.DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    email: {
+      type: Sequelize.DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        isEmail: true,
+      },
+    },
+  },
+  {
+    tableName: "emails",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: false,
+  }
+);
 
 // Main function to send property notification emails
 async function sendPropertyNotificationEmails() {
   try {
     parentPort.postMessage(`Processing property ID: ${propertyId}`);
 
+    // Initialize the database connection
+    await sequelize.authenticate();
+    parentPort.postMessage("Worker database connection established");
+
     // Get property information
-    const propertiesData = readData(PROPERTIES_FILE);
-    const property = propertiesData.properties.find(
-      (p) => p.id === parseInt(propertyId)
-    );
+    const property = await Property.findByPk(propertyId);
 
     if (!property) {
       parentPort.postMessage(`Property not found with ID: ${propertyId}`);
@@ -41,8 +95,7 @@ async function sendPropertyNotificationEmails() {
     }
 
     // Get email subscribers
-    const emailsData = readData(EMAILS_FILE);
-    const subscribers = emailsData.emails;
+    const subscribers = await Email.findAll();
 
     if (subscribers.length === 0) {
       parentPort.postMessage("No email subscribers found");
@@ -128,6 +181,10 @@ async function sendPropertyNotificationEmails() {
     );
   } catch (error) {
     parentPort.postMessage(`Error in worker: ${error.message}`);
+  } finally {
+    // Close the database connection
+    await sequelize.close();
+    parentPort.postMessage("Worker database connection closed");
   }
 }
 

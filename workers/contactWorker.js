@@ -1,5 +1,6 @@
 const { workerData, parentPort } = require("worker_threads");
 const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 // Get data from main thread
 const { contactData, emailConfig } = workerData;

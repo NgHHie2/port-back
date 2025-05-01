@@ -2,37 +2,14 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require("path");
-const fs = require("fs");
 const { Worker } = require("worker_threads");
-const {
-  ensureDataDirectoryExists,
-  Properties,
-  Emails,
-} = require("./data/dataHandler");
+const { testConnection, initDB } = require("./config/db");
+const Property = require("./models/Property");
+const Email = require("./models/Email");
 
 require("dotenv").config();
 
 const app = express();
-
-// Ensure directories exist
-function ensureDirectoriesExist() {
-  const directories = [
-    path.join(__dirname, "workers"),
-    path.join(__dirname, "public"),
-    path.join(__dirname, "data"),
-  ];
-
-  directories.forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
-    }
-  });
-}
-
-// Create directories and initialize data files
-ensureDirectoriesExist();
-ensureDataDirectoryExists();
 
 // Middleware
 app.use(
@@ -135,7 +112,7 @@ const verifyConfirmCode = (req, res, next) => {
 // Routes API for properties
 app.get("/api/properties", async (req, res) => {
   try {
-    const properties = Properties.findAll();
+    const properties = await Property.findAll();
     res.json(properties);
   } catch (error) {
     console.error("Error getting properties list:", error);
@@ -146,10 +123,10 @@ app.get("/api/properties", async (req, res) => {
 app.get("/api/properties/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const property = Properties.findById(id);
+    const property = await Property.findByPk(id);
 
     if (!property) {
-      return res.status(404).json({ message: "Hiện không có dự án nào" });
+      return res.status(404).json({ message: "Không tìm thấy dự án" });
     }
 
     res.json(property);
@@ -167,7 +144,7 @@ app.post("/api/properties", verifyConfirmCode, async (req, res) => {
       return res.status(400).json({ message: "Thiếu thông tin" });
     }
 
-    const newProperty = Properties.create({
+    const newProperty = await Property.create({
       name,
       address,
       price,
@@ -196,18 +173,20 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
     const { id } = req.params;
     const { name, address, price, image_url } = req.body;
 
-    const updatedProperty = Properties.update(id, {
-      name,
-      address,
-      price,
-      image_url,
-    });
+    const property = await Property.findByPk(id);
 
-    if (!updatedProperty) {
+    if (!property) {
       return res.status(404).json({ message: "Dự án không tồn tại" });
     }
 
-    res.json(updatedProperty);
+    property.name = name;
+    property.address = address;
+    property.price = price;
+    property.image_url = image_url;
+
+    await property.save();
+
+    res.json(property);
   } catch (error) {
     console.error("Error updating property:", error);
     res.status(500).json({ message: "Server error" });
@@ -217,11 +196,13 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
 app.delete("/api/properties/:id", verifyConfirmCode, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = Properties.delete(id);
+    const property = await Property.findByPk(id);
 
-    if (!result) {
+    if (!property) {
       return res.status(404).json({ message: "Dự án không tồn tại" });
     }
+
+    await property.destroy();
 
     res.json({ message: "Xóa thành công" });
   } catch (error) {
@@ -239,11 +220,15 @@ app.post("/api/subscribe", async (req, res) => {
       return res.status(400).json({ message: "Email được yêu cầu" });
     }
 
-    const result = Emails.create(email);
+    // Check if email already exists
+    const existingEmail = await Email.findOne({ where: { email } });
 
-    if (!result.created) {
+    if (existingEmail) {
       return res.status(400).json({ message: "Email này đã từng đăng ký" });
     }
+
+    // Create new email subscriber
+    await Email.create({ email });
 
     res.status(201).json({ message: "Đăng ký thành công!! Cảm ơn bạn." });
   } catch (error) {
@@ -255,7 +240,7 @@ app.post("/api/subscribe", async (req, res) => {
 // API for emails list
 app.get("/api/emails", async (req, res) => {
   try {
-    const emails = Emails.findAll();
+    const emails = await Email.findAll();
     res.json(emails);
   } catch (error) {
     console.error("Error getting emails list:", error);
@@ -273,7 +258,11 @@ app.post("/api/contact", async (req, res) => {
     }
 
     // Store email in subscribers if not already present
-    Emails.create(email);
+    const existingEmail = await Email.findOne({ where: { email } });
+
+    if (!existingEmail) {
+      await Email.create({ email });
+    }
 
     // Create worker thread to send contact notification
     createContactWorker({ email, name, phone, message })
@@ -301,8 +290,30 @@ app.get("/", (req, res) => {
   res.send("API server is running. Access /admin to manage properties.");
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Test database connection
+    const connected = await testConnection();
+
+    if (!connected) {
+      console.error("Failed to connect to database. Server will not start.");
+      process.exit(1);
+    }
+
+    // Initialize the database (sync models)
+    await initDB();
+
+    // Start the server
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Error starting server:", error);
+    process.exit(1);
+  }
+}
+
+// Start the application
+startServer();
