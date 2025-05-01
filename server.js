@@ -24,18 +24,21 @@ app.use(express.static(path.join(__dirname, "public")));
 // Create worker for sending email notifications
 const createEmailWorker = (propertyId) => {
   return new Promise((resolve, reject) => {
-    const worker = new Worker("./workers/emailWorker.js", {
-      workerData: {
-        propertyId,
-        emailConfig: {
-          host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT,
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
+    const worker = new Worker(
+      path.join(__dirname, "workers", "emailWorker.js"),
+      {
+        workerData: {
+          propertyId,
+          emailConfig: {
+            host: process.env.EMAIL_HOST,
+            port: process.env.EMAIL_PORT,
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+          databaseURL: process.env.DATABASE_URL,
         },
-        databaseURL: process.env.DATABASE_URL,
-      },
-    });
+      }
+    );
 
     worker.on("message", (message) => {
       console.log(`Worker message: ${message}`);
@@ -60,18 +63,21 @@ const createEmailWorker = (propertyId) => {
 // Worker for handling contact form submissions
 const createContactWorker = (contactData) => {
   return new Promise((resolve, reject) => {
-    const worker = new Worker("./workers/contactWorker.js", {
-      workerData: {
-        contactData,
-        emailConfig: {
-          host: process.env.EMAIL_HOST,
-          port: process.env.EMAIL_PORT,
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-          receiver: process.env.EMAIL_RECEIVER,
+    const worker = new Worker(
+      path.join(__dirname, "workers", "contactWorker.js"),
+      {
+        workerData: {
+          contactData,
+          emailConfig: {
+            host: process.env.EMAIL_HOST,
+            port: process.env.EMAIL_PORT,
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+            receiver: process.env.EMAIL_RECEIVER,
+          },
         },
-      },
-    });
+      }
+    );
 
     worker.on("message", (message) => {
       console.log(`Contact worker message: ${message}`);
