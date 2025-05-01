@@ -78,6 +78,10 @@ const createContactWorker = (contactData) => {
         },
       }
     );
+    console.log(
+      "Đường dẫn emailWorker.js:",
+      path.join(__dirname, "workers", "emailWorker.js")
+    );
 
     worker.on("message", (message) => {
       console.log(`Contact worker message: ${message}`);
