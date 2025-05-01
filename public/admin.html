@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quản lý Dự án - Hòa Nguyễn BĐS</title>
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Font Awesome -->
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+
+    <!-- Custom CSS -->
+    <link href="css/admin.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="admin-panel">
+      <!-- Form thêm dự án mới -->
+      <div id="addPropertyForm">
+        <h3 class="mb-4">Thêm dự án mới</h3>
+        <form id="propertyForm">
+          <input type="hidden" id="propertyId" />
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label for="name" class="form-label">Tên dự án</label>
+              <input
+                type="text"
+                class="form-control"
+                id="name"
+                placeholder="Nhập tên dự án"
+                required
+              />
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="price" class="form-label">Giá</label>
+              <input
+                type="text"
+                class="form-control"
+                id="price"
+                placeholder="Ví dụ: 2,5 tỷ"
+                required
+              />
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="address" class="form-label">Địa chỉ</label>
+            <input
+              type="text"
+              class="form-control"
+              id="address"
+              placeholder="Nhập địa chỉ dự án"
+              required
+            />
+          </div>
+          <div class="mb-3">
+            <label for="image_url" class="form-label">Link hình ảnh</label>
+            <input
+              type="text"
+              class="form-control"
+              id="image_url"
+              placeholder="Nhập link hình ảnh dự án"
+            />
+            <div class="form-text">Link hình ảnh trực tiếp (URL)</div>
+          </div>
+          <div class="mb-3">
+            <label for="confirmCode" class="form-label">Mã xác nhận</label>
+            <input
+              type="password"
+              class="form-control"
+              id="confirmCode"
+              placeholder="Nhập mã xác nhận"
+              required
+            />
+            <div class="form-text">Nhập mã xác nhận để thực hiện thao tác</div>
+          </div>
+          <div class="d-flex">
+            <button type="submit" class="btn btn-primary me-2">
+              <i class="fas fa-save"></i> Lưu dự án
+            </button>
+            <button type="button" id="resetBtn" class="btn btn-secondary">
+              <i class="fas fa-undo"></i> Hủy
+            </button>
+          </div>
+        </form>
+
+        <div class="alert alert-success" id="successAlert"></div>
+        <div class="alert alert-danger" id="errorAlert"></div>
+      </div>
+
+      <!-- Danh sách dự án -->
+      <h3 class="mb-4">Danh sách dự án</h3>
+      <div id="propertyList" class="row">
+        <div class="col-12 text-center">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Đang tải...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal xác nhận xóa -->
+    <div
+      class="modal fade"
+      id="deleteModal"
+      tabindex="-1"
+      aria-labelledby="deleteModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteModalLabel">Xác nhận xóa</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body">Bạn có chắc chắn muốn xóa dự án này?</div>
+          <div class="mb-3">
+            <label for="deleteConfirmCode" class="form-label"
+              >Mã xác nhận</label
+            >
+            <input
+              type="password"
+              class="form-control"
+              id="deleteConfirmCode"
+              placeholder="Nhập mã xác nhận"
+              required
+            />
+            <div class="form-text">Nhập mã xác nhận để thực hiện thao tác</div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Hủy
+            </button>
+            <button type="button" class="btn btn-danger" id="confirmDelete">
+              Xóa
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap Bundle với Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Custom JS -->
+    <script src="js/admin.js"></script>
+  </body>
+</html>

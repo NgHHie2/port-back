@@ -1,0 +1,80 @@
+/* Admin Panel Styles */
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+  padding-top: 20px;
+  padding-bottom: 40px;
+}
+
+.header {
+  background-color: #0053a6;
+  color: white;
+  padding: 20px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.admin-panel {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.property-item {
+  background-color: white;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.property-item:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.property-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 5px;
+  margin-bottom: 15px;
+}
+
+.btn-action {
+  margin-right: 5px;
+}
+
+#addPropertyForm {
+  background-color: white;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  margin-bottom: 30px;
+}
+
+.form-control:focus {
+  border-color: #0053a6;
+  box-shadow: 0 0 0 0.25rem rgba(0, 83, 166, 0.25);
+}
+
+.btn-primary {
+  background-color: #0053a6;
+  border-color: #0053a6;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: #003e7e;
+  border-color: #003e7e;
+}
+
+.alert {
+  display: none;
+  margin-top: 20px;
+}
+
+.email-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
