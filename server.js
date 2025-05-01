@@ -3,9 +3,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require("path");
 const { Worker } = require("worker_threads");
-const { testConnection, initDB } = require("./config/db");
-const Property = require("./models/Property");
-const Email = require("./models/Email");
+const { sql, testConnection, initDB } = require("./config/db");
 
 require("dotenv").config();
 
@@ -35,6 +33,7 @@ const createEmailWorker = (propertyId) => {
           user: process.env.EMAIL_USER,
           pass: process.env.EMAIL_PASS,
         },
+        databaseURL: process.env.DATABASE_URL,
       },
     });
 
@@ -112,7 +111,8 @@ const verifyConfirmCode = (req, res, next) => {
 // Routes API for properties
 app.get("/api/properties", async (req, res) => {
   try {
-    const properties = await Property.findAll();
+    const properties =
+      await sql`SELECT * FROM properties ORDER BY created_at DESC`;
     res.json(properties);
   } catch (error) {
     console.error("Error getting properties list:", error);
@@ -123,7 +123,7 @@ app.get("/api/properties", async (req, res) => {
 app.get("/api/properties/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const property = await Property.findByPk(id);
+    const [property] = await sql`SELECT * FROM properties WHERE id = ${id}`;
 
     if (!property) {
       return res.status(404).json({ message: "Không tìm thấy dự án" });
@@ -144,12 +144,11 @@ app.post("/api/properties", verifyConfirmCode, async (req, res) => {
       return res.status(400).json({ message: "Thiếu thông tin" });
     }
 
-    const newProperty = await Property.create({
-      name,
-      address,
-      price,
-      image_url,
-    });
+    const [newProperty] = await sql`
+      INSERT INTO properties (name, address, price, image_url, created_at, updated_at)
+      VALUES (${name}, ${address}, ${price}, ${image_url}, NOW(), NOW())
+      RETURNING *
+    `;
 
     // Create worker thread to send notification emails
     // Won't block the main API thread
@@ -173,20 +172,26 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
     const { id } = req.params;
     const { name, address, price, image_url } = req.body;
 
-    const property = await Property.findByPk(id);
+    // Check if property exists
+    const [property] = await sql`SELECT * FROM properties WHERE id = ${id}`;
 
     if (!property) {
       return res.status(404).json({ message: "Dự án không tồn tại" });
     }
 
-    property.name = name;
-    property.address = address;
-    property.price = price;
-    property.image_url = image_url;
+    // Update the property
+    const [updatedProperty] = await sql`
+      UPDATE properties 
+      SET name = ${name}, 
+          address = ${address}, 
+          price = ${price}, 
+          image_url = ${image_url}, 
+          updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `;
 
-    await property.save();
-
-    res.json(property);
+    res.json(updatedProperty);
   } catch (error) {
     console.error("Error updating property:", error);
     res.status(500).json({ message: "Server error" });
@@ -196,13 +201,16 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
 app.delete("/api/properties/:id", verifyConfirmCode, async (req, res) => {
   try {
     const { id } = req.params;
-    const property = await Property.findByPk(id);
+
+    // Check if property exists
+    const [property] = await sql`SELECT * FROM properties WHERE id = ${id}`;
 
     if (!property) {
       return res.status(404).json({ message: "Dự án không tồn tại" });
     }
 
-    await property.destroy();
+    // Delete the property
+    await sql`DELETE FROM properties WHERE id = ${id}`;
 
     res.json({ message: "Xóa thành công" });
   } catch (error) {
@@ -221,14 +229,15 @@ app.post("/api/subscribe", async (req, res) => {
     }
 
     // Check if email already exists
-    const existingEmail = await Email.findOne({ where: { email } });
+    const existingEmail =
+      await sql`SELECT * FROM emails WHERE email = ${email}`;
 
-    if (existingEmail) {
+    if (existingEmail.length > 0) {
       return res.status(400).json({ message: "Email này đã từng đăng ký" });
     }
 
     // Create new email subscriber
-    await Email.create({ email });
+    await sql`INSERT INTO emails (email, created_at) VALUES (${email}, NOW())`;
 
     res.status(201).json({ message: "Đăng ký thành công!! Cảm ơn bạn." });
   } catch (error) {
@@ -240,7 +249,7 @@ app.post("/api/subscribe", async (req, res) => {
 // API for emails list
 app.get("/api/emails", async (req, res) => {
   try {
-    const emails = await Email.findAll();
+    const emails = await sql`SELECT * FROM emails ORDER BY created_at DESC`;
     res.json(emails);
   } catch (error) {
     console.error("Error getting emails list:", error);
@@ -258,10 +267,11 @@ app.post("/api/contact", async (req, res) => {
     }
 
     // Store email in subscribers if not already present
-    const existingEmail = await Email.findOne({ where: { email } });
+    const existingEmail =
+      await sql`SELECT * FROM emails WHERE email = ${email}`;
 
-    if (!existingEmail) {
-      await Email.create({ email });
+    if (existingEmail.length === 0) {
+      await sql`INSERT INTO emails (email, created_at) VALUES (${email}, NOW())`;
     }
 
     // Create worker thread to send contact notification
@@ -301,7 +311,7 @@ async function startServer() {
       process.exit(1);
     }
 
-    // Initialize the database (sync models)
+    // Initialize the database (create tables if they don't exist)
     await initDB();
 
     // Start the server
