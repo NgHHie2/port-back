@@ -26,29 +26,29 @@ async function sendContactNotification() {
     const mailOptions = {
       from: `"Real Estate Website" <${emailConfig.user}>`,
       to: emailConfig.receiver,
-      subject: "New contact from website",
+      subject: "Có người liên hệ từ website",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #0053a6;">New contact information</h2>
+          <h2 style="color: #0053a6;">Tin nhắn</h2>
           <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
             <p><strong>Email:</strong> ${contactData.email}</p>
             ${
               contactData.name
-                ? `<p><strong>Name:</strong> ${contactData.name}</p>`
+                ? `<p><strong>Tên:</strong> ${contactData.name}</p>`
                 : ""
             }
             ${
               contactData.phone
-                ? `<p><strong>Phone:</strong> ${contactData.phone}</p>`
+                ? `<p><strong>SĐT:</strong> ${contactData.phone}</p>`
                 : ""
             }
             ${
               contactData.message
-                ? `<p><strong>Message:</strong> ${contactData.message}</p>`
+                ? `<p><strong>Tin nhắn:</strong> ${contactData.message}</p>`
                 : ""
             }
           </div>
-          <p style="font-size: 12px; color: #666; margin-top: 30px;">This is an automated email from the website contact form.</p>
+          <p style="font-size: 12px; color: #666; margin-top: 30px;">Email này được gửi tự động từ form liên hệ trên website.</p>
         </div>
       `,
     };

@@ -79,22 +79,22 @@ async function sendPropertyNotificationEmails() {
         const mailOptions = {
           from: `"Hòa Nguyễn BĐS" <${emailConfig.user}>`,
           bcc: emails, // Use BCC to hide recipient list
-          subject: `New project: ${property.name}`,
+          subject: `Dự án mới: ${property.name}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #0053a6;">New project has been updated</h2>
-              <p>Contact for more details: <strong>0946 314286</strong></p>
+              <h2 style="color: #0053a6;">Dự án mới vừa được cập nhật</h2>
+              <p>Liên hệ để nhận thông tin chi tiết: <strong>0946 314286</strong></p>
               <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
                 <h3 style="color: #ff6b35; margin-top: 0;">${property.name}</h3>
-                <p><strong>Address:</strong> ${property.address}</p>
-                <p><strong>Price:</strong> ${property.price}</p>
+                <p><strong>Chi tiết:</strong> ${property.address}</p>
+                <p><strong>Giá:</strong> ${property.price}</p>
                 ${
                   property.image_url
                     ? `<img src="${property.image_url}" alt="${property.name}" style="max-width: 100%; height: auto; margin: 10px 0;">`
                     : ""
                 }
               </div>
-              <p style="font-size: 12px; color: #666; margin-top: 30px;">This is an automated email. Please do not reply.</p>
+              <p style="font-size: 12px; color: #666; margin-top: 30px;">Email này được gửi tự động. Vui lòng không trả lời.</p>
             </div>
           `,
         };

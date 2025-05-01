@@ -1,6 +1,42 @@
 {
-  "nextId": 4,
+  "nextId": 8,
   "properties": [
+    {
+      "id": 7,
+      "name": "Nguyễn Hoàng Hiệp",
+      "address": "nhà đất 25m2, hướng Đông",
+      "price": "2,2 tỉ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T18:11:11.909Z",
+      "updated_at": "2025-05-01T18:11:11.909Z"
+    },
+    {
+      "id": 6,
+      "name": "Nguyễn Hoàng Hiệp",
+      "address": "nhà đất 25m2, hướng Đông",
+      "price": "2,2 tỉ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T18:05:13.030Z",
+      "updated_at": "2025-05-01T18:05:13.031Z"
+    },
+    {
+      "id": 5,
+      "name": "Gia Lâm Hà Nội",
+      "address": "nhà đất 25m2, hướng Đông",
+      "price": "2,2 tỉ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T18:03:41.290Z",
+      "updated_at": "2025-05-01T18:03:41.291Z"
+    },
+    {
+      "id": 4,
+      "name": "Nguyễn",
+      "address": "nhà đất 25m2, hướng Đông",
+      "price": "2,2 tỉ",
+      "image_url": "https://res.cloudinary.com/dditosqku/image/upload/v1717080348/r0g9hhfghzlctqzojsde.jpg",
+      "created_at": "2025-05-01T17:57:13.146Z",
+      "updated_at": "2025-05-01T17:57:13.146Z"
+    },
     {
       "id": 3,
       "name": "Nguyễn Hoàng Hiệp",

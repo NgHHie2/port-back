@@ -75,7 +75,7 @@ const createEmailWorker = (propertyId) => {
       if (code !== 0) {
         reject(new Error(`Worker stopped with exit code ${code}`));
       } else {
-        resolve("Worker completed successfully");
+        resolve("Gửi mail thành công");
       }
     });
   });
@@ -149,7 +149,7 @@ app.get("/api/properties/:id", async (req, res) => {
     const property = Properties.findById(id);
 
     if (!property) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({ message: "Hiện không có dự án nào" });
     }
 
     res.json(property);
@@ -164,7 +164,7 @@ app.post("/api/properties", verifyConfirmCode, async (req, res) => {
     const { name, address, price, image_url } = req.body;
 
     if (!name || !address || !price) {
-      return res.status(400).json({ message: "Missing required information" });
+      return res.status(400).json({ message: "Thiếu thông tin" });
     }
 
     const newProperty = Properties.create({
@@ -204,7 +204,7 @@ app.put("/api/properties/:id", verifyConfirmCode, async (req, res) => {
     });
 
     if (!updatedProperty) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({ message: "Dự án không tồn tại" });
     }
 
     res.json(updatedProperty);
@@ -220,10 +220,10 @@ app.delete("/api/properties/:id", verifyConfirmCode, async (req, res) => {
     const result = Properties.delete(id);
 
     if (!result) {
-      return res.status(404).json({ message: "Property not found" });
+      return res.status(404).json({ message: "Dự án không tồn tại" });
     }
 
-    res.json({ message: "Property deleted successfully" });
+    res.json({ message: "Xóa thành công" });
   } catch (error) {
     console.error("Error deleting property:", error);
     res.status(500).json({ message: "Server error" });
@@ -236,16 +236,16 @@ app.post("/api/subscribe", async (req, res) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ message: "Email được yêu cầu" });
     }
 
     const result = Emails.create(email);
 
     if (!result.created) {
-      return res.status(400).json({ message: "Email already subscribed" });
+      return res.status(400).json({ message: "Email này đã từng đăng ký" });
     }
 
-    res.status(201).json({ message: "Subscription successful" });
+    res.status(201).json({ message: "Đăng ký thành công!! Cảm ơn bạn." });
   } catch (error) {
     console.error("Error subscribing email:", error);
     res.status(500).json({ message: "Server error" });
@@ -269,7 +269,7 @@ app.post("/api/contact", async (req, res) => {
     const { email, name, phone, message } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({ message: "Email được yêu cầu" });
     }
 
     // Store email in subscribers if not already present
@@ -284,7 +284,7 @@ app.post("/api/contact", async (req, res) => {
         console.error("Error sending contact notification:", error);
       });
 
-    res.status(200).json({ message: "Contact information sent successfully" });
+    res.status(200).json({ message: "Gửi tin nhắn thành công!!" });
   } catch (error) {
     console.error("Error sending contact info:", error);
     res.status(500).json({ message: "Server error" });
