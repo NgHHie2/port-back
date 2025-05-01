@@ -23,6 +23,19 @@ async function sendContactNotification() {
       },
     });
 
+    await new Promise((resolve, reject) => {
+      // verify connection configuration
+      transporter.verify(function (error, success) {
+        if (error) {
+          console.log(error);
+          reject(error);
+        } else {
+          console.log("Server is ready to take our messages");
+          resolve(success);
+        }
+      });
+    });
+
     // Create email content
     const mailOptions = {
       from: `"Real Estate Website" <${emailConfig.user}>`,
@@ -55,7 +68,18 @@ async function sendContactNotification() {
     };
 
     // Send email
-    await transporter.sendMail(mailOptions);
+    await new Promise((resolve, reject) => {
+      transporter.sendMail(mailOptions, (err, info) => {
+        if (err) {
+          console.error(err);
+          reject(err);
+        } else {
+          console.log(info);
+          resolve(info);
+        }
+      });
+    });
+
     parentPort.postMessage("Contact notification email sent successfully");
   } catch (error) {
     parentPort.postMessage(

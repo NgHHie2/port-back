@@ -52,6 +52,19 @@ async function sendPropertyNotificationEmails() {
       },
     });
 
+    await new Promise((resolve, reject) => {
+      // verify connection configuration
+      transporter.verify(function (error, success) {
+        if (error) {
+          console.log(error);
+          reject(error);
+        } else {
+          console.log("Server is ready to take our messages");
+          resolve(success);
+        }
+      });
+    });
+
     // Split emails into small groups for sending
     const chunkSize = 50; // Send max 50 emails at once
     let successCount = 0;
@@ -88,7 +101,17 @@ async function sendPropertyNotificationEmails() {
         };
 
         // Send email
-        await transporter.sendMail(mailOptions);
+        await new Promise((resolve, reject) => {
+          transporter.sendMail(mailOptions, (err, info) => {
+            if (err) {
+              console.error(err);
+              reject(err);
+            } else {
+              console.log(info);
+              resolve(info);
+            }
+          });
+        });
         successCount += chunk.length;
 
         parentPort.postMessage(
