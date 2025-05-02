@@ -13,7 +13,7 @@ const resend = new Resend(process.env.API_MAIL);
 // Middleware
 app.use(
   cors({
-    origin: "*",
+    origin: process.env.EXTERNAL_HOST,
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
