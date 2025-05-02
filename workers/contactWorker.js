@@ -46,23 +46,63 @@ async function sendContactNotification() {
       `,
     };
 
-    // Send email
-    // Send email
-    (async function () {
-      const { data, error } = await resend.emails.send({
-        from: mailOptions.from,
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        html: mailOptions.html,
-      });
+    // Implement retry mechanism
+    let emailSent = false;
+    let attemptCount = 0;
+    const maxAttempts = 3; // Số lần thử lại tối đa
+    let lastError = null;
 
-      if (error) {
-        return console.error({ error });
+    // Tiếp tục thử cho đến khi email được gửi thành công hoặc đạt đến số lần thử lại tối đa
+    while (!emailSent && attemptCount < maxAttempts) {
+      attemptCount++;
+
+      try {
+        parentPort.postMessage(
+          `Attempt ${attemptCount}/${maxAttempts} to send contact notification`
+        );
+
+        // Send email
+        const { data, error } = await resend.emails.send({
+          from: mailOptions.from,
+          to: mailOptions.to,
+          subject: mailOptions.subject,
+          html: mailOptions.html,
+        });
+
+        if (error) {
+          throw new Error(`Error from Resend API: ${JSON.stringify(error)}`);
+        }
+
+        // If we get here, email was sent successfully
+        emailSent = true;
+        parentPort.postMessage(
+          `Contact notification email sent successfully on attempt ${attemptCount}`
+        );
+      } catch (error) {
+        lastError = error;
+
+        // Nếu đã thử hết số lần cho phép mà vẫn thất bại
+        if (attemptCount >= maxAttempts) {
+          parentPort.postMessage(
+            `Failed to send contact notification email after ${maxAttempts} attempts. Last error: ${error.message}`
+          );
+        } else {
+          // Thông báo về việc thử lại
+          parentPort.postMessage(
+            `Attempt ${attemptCount}/${maxAttempts} failed: ${error.message}. Retrying...`
+          );
+
+          // Chờ thời gian dài hơn giữa các lần thử lại (tăng theo số lần thử)
+          const backoffTime = 1000 * attemptCount; // 1s, 2s, 3s...
+          await new Promise((resolve) => setTimeout(resolve, backoffTime));
+        }
       }
+    }
 
-      console.log({ data });
-    })();
-    parentPort.postMessage("Contact notification email sent successfully");
+    // If all attempts failed, throw the last error
+    if (!emailSent) {
+      throw lastError || new Error("Failed to send email after all attempts");
+    }
   } catch (error) {
     parentPort.postMessage(
       `Error sending contact notification email: ${error.message}`
