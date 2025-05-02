@@ -452,13 +452,13 @@ app.post("/api/contact", async (req, res) => {
 });
 
 // Serve admin page
-app.get("/admin", (req, res) => {
+app.get("/admin-hoabds", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
 
 // Default route
 app.get("/", (req, res) => {
-  res.send("API server is running. Access /admin to manage properties.");
+  res.send("API server is running.");
 });
 
 // Initialize database and start server
