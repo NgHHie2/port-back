@@ -2,12 +2,13 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require("path");
-const { Worker } = require("worker_threads");
+const { Resend } = require("resend");
 const { sql, testConnection, initDB } = require("./config/db");
 
 require("dotenv").config();
 
 const app = express();
+const resend = new Resend(process.env.API_MAIL);
 
 // Middleware
 app.use(
@@ -21,87 +22,226 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Create worker for sending email notifications
-const createEmailWorker = (propertyId) => {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(
-      path.join(__dirname, "workers", "emailWorker.js"),
-      {
-        workerData: {
-          propertyId,
-          emailConfig: {
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT,
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-          },
-          databaseURL: process.env.DATABASE_URL,
-        },
-      }
-    );
+// Function to send property notification emails
+async function sendPropertyNotificationEmails(propertyId) {
+  try {
+    console.log(`Processing property ID: ${propertyId}`);
 
-    worker.on("message", (message) => {
-      console.log(`Worker message: ${message}`);
-      resolve(message);
-    });
+    // Get property information
+    const [property] =
+      await sql`SELECT * FROM properties WHERE id = ${propertyId}`;
 
-    worker.on("error", (error) => {
-      console.error("Worker error:", error);
-      reject(error);
-    });
+    if (!property) {
+      console.log(`Property not found with ID: ${propertyId}`);
+      return;
+    }
 
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Worker stopped with exit code ${code}`));
-      } else {
-        resolve("Gửi mail thành công");
-      }
-    });
-  });
-};
+    // Get email subscribers
+    const subscribers = await sql`SELECT * FROM emails`;
 
-// Worker for handling contact form submissions
-const createContactWorker = (contactData) => {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(
-      path.join(__dirname, "workers", "contactWorker.js"),
-      {
-        workerData: {
-          contactData,
-          emailConfig: {
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT,
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-            receiver: process.env.EMAIL_RECEIVER,
-          },
-        },
-      }
-    );
+    if (subscribers.length === 0) {
+      console.log("No email subscribers found");
+      return;
+    }
+
+    console.log(`Preparing to send email to ${subscribers.length} subscribers`);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Process subscribers sequentially with a small delay between each
+    for (const subscriber of subscribers) {
+      // Send email with retry functionality
+      await sendSinglePropertyEmail(subscriber, property).then((success) => {
+        if (success) {
+          successCount++;
+          console.log(
+            `Successfully sent email to ${subscriber.email} (${successCount + failCount}/${subscribers.length})`
+          );
+        } else {
+          failCount++;
+          console.error(
+            `Failed to send email to ${subscriber.email} after all retry attempts`
+          );
+        }
+      });
+
+      // Add a small delay between emails to avoid rate limiting
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
     console.log(
-      "Đường dẫn emailWorker.js:",
-      path.join(__dirname, "workers", "emailWorker.js")
+      `Email sending process completed: Success: ${successCount}, Failed: ${failCount}`
+    );
+    return true;
+  } catch (error) {
+    console.error(
+      `Error in sending property notification emails: ${error.message}`
+    );
+    return false;
+  }
+}
+
+// Helper function to send a single property email with retry mechanism
+async function sendSinglePropertyEmail(subscriber, property) {
+  const maxAttempts = 3;
+  let attemptCount = 0;
+
+  // Create email content for a single recipient
+  const mailOptions = {
+    from: `"Hòa Nguyễn BĐS" <${process.env.EMAIL_USER}>`,
+    to: subscriber.email,
+    subject: `Dự án mới: ${property.name}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #0053a6;">Dự án mới vừa được cập nhật</h2>
+        <p>Liên hệ để nhận thông tin chi tiết: <strong>0946 314286</strong></p>
+        <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <h3 style="color: #ff6b35; margin-top: 0;">${property.name}</h3>
+          <p><strong>Chi tiết:</strong> ${property.address}</p>
+          <p><strong>Giá:</strong> ${property.price}</p>
+          ${
+            property.image_url
+              ? `<img src="${property.image_url}" alt="${property.name}" style="max-width: 100%; height: auto; margin: 10px 0;">`
+              : ""
+          }
+        </div>
+        <p>Truy cập <a href="https://hoabds.online">hoabds.online</a> để xem nhiều dự án khác.</p>
+
+        <p style="font-size: 12px; color: #666; margin-top: 30px;">Email này được gửi tự động. Vui lòng không trả lời.</p>
+      </div>
+    `,
+  };
+
+  // Try sending the email multiple times with backoff
+  while (attemptCount < maxAttempts) {
+    attemptCount++;
+
+    try {
+      const { data, error } = await resend.emails.send({
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+      });
+
+      if (error) {
+        throw new Error(`Error from Resend API: ${JSON.stringify(error)}`);
+      }
+
+      // If successful, return true
+      return true;
+    } catch (error) {
+      if (attemptCount >= maxAttempts) {
+        console.error(
+          `Failed to send email to ${subscriber.email} after ${maxAttempts} attempts: ${error.message}`
+        );
+        return false;
+      } else {
+        console.log(
+          `Attempt ${attemptCount}/${maxAttempts} failed for ${subscriber.email}: ${error.message}. Retrying...`
+        );
+
+        // Exponential backoff between retries (1s, 2s, 4s, etc.)
+        const backoffTime = 1000 * Math.pow(2, attemptCount - 1);
+        await new Promise((resolve) => setTimeout(resolve, backoffTime));
+      }
+    }
+  }
+
+  return false;
+}
+
+// Function to send contact notification email
+async function sendContactNotification(contactData) {
+  try {
+    console.log(
+      `Starting to send contact notification from: ${contactData.email}`
     );
 
-    worker.on("message", (message) => {
-      console.log(`Contact worker message: ${message}`);
-      resolve(message);
-    });
+    // Create email content
+    const mailOptions = {
+      from: `"Hòa Nguyễn BĐS" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_RECEIVER,
+      subject: "Có người liên hệ từ website",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #0053a6;">Tin nhắn</h2>
+          <div style="border: 1px solid #ddd; padding: 15px; border-radius: 5px;">
+            <p><strong>Email:</strong> ${contactData.email}</p>
+            ${
+              contactData.name
+                ? `<p><strong>Tên:</strong> ${contactData.name}</p>`
+                : ""
+            }
+            ${
+              contactData.phone
+                ? `<p><strong>SĐT:</strong> ${contactData.phone}</p>`
+                : ""
+            }
+            ${
+              contactData.message
+                ? `<p><strong>Tin nhắn:</strong> ${contactData.message}</p>`
+                : ""
+            }
+          </div>
+          <p style="font-size: 12px; color: #666; margin-top: 30px;">Email này được gửi tự động từ form liên hệ trên website.</p>
+        </div>
+      `,
+    };
 
-    worker.on("error", (error) => {
-      console.error("Contact worker error:", error);
-      reject(error);
-    });
+    // Implement retry mechanism
+    const maxAttempts = 3;
+    let attemptCount = 0;
 
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        reject(new Error(`Contact worker stopped with exit code ${code}`));
-      } else {
-        resolve("Contact worker completed successfully");
+    // Try sending the email multiple times with backoff
+    while (attemptCount < maxAttempts) {
+      attemptCount++;
+
+      try {
+        console.log(`Contact email attempt ${attemptCount}/${maxAttempts}`);
+
+        const { data, error } = await resend.emails.send({
+          from: mailOptions.from,
+          to: mailOptions.to,
+          subject: mailOptions.subject,
+          html: mailOptions.html,
+        });
+
+        if (error) {
+          throw new Error(`Error from Resend API: ${JSON.stringify(error)}`);
+        }
+
+        console.log(
+          `Contact notification email sent successfully on attempt ${attemptCount}`
+        );
+        return true;
+      } catch (error) {
+        if (attemptCount >= maxAttempts) {
+          console.error(
+            `Failed to send contact notification email after ${maxAttempts} attempts. Last error: ${error.message}`
+          );
+          return false;
+        } else {
+          console.log(
+            `Attempt ${attemptCount}/${maxAttempts} failed: ${error.message}. Retrying...`
+          );
+
+          // Exponential backoff between retries (1s, 2s, 4s, etc.)
+          const backoffTime = 1000 * Math.pow(2, attemptCount - 1);
+          await new Promise((resolve) => setTimeout(resolve, backoffTime));
+        }
       }
-    });
-  });
-};
+    }
+
+    return false;
+  } catch (error) {
+    console.error(
+      `Error preparing contact notification email: ${error.message}`
+    );
+    return false;
+  }
+}
 
 // Middleware to verify admin confirmation code
 const verifyConfirmCode = (req, res, next) => {
@@ -146,6 +286,7 @@ app.get("/api/properties/:id", async (req, res) => {
   }
 });
 
+// API for properties
 app.post("/api/properties", verifyConfirmCode, async (req, res) => {
   try {
     const { name, address, price, image_url } = req.body;
@@ -160,17 +301,22 @@ app.post("/api/properties", verifyConfirmCode, async (req, res) => {
       RETURNING *
     `;
 
-    // Create worker thread to send notification emails
-    // Won't block the main API thread
-    createEmailWorker(newProperty.id)
+    // Trả về response thành công ngay lập tức
+    res.status(201).json(newProperty);
+
+    // Sau đó mới bắt đầu gửi email trong nền
+    // Process sẽ tiếp tục chạy sau khi response đã được gửi
+    sendPropertyNotificationEmails(newProperty.id)
       .then((result) => {
-        console.log(`Email sending result: ${result}`);
+        console.log(
+          `Email notification process initialized: ${result ? "Successfully" : "Failed"}`
+        );
       })
       .catch((error) => {
-        console.error("Error sending notification email:", error);
+        console.error(
+          `Unexpected error in email notification process: ${error.message}`
+        );
       });
-
-    res.status(201).json(newProperty);
   } catch (error) {
     console.error("Error adding property:", error);
     res.status(500).json({ message: "Server error" });
@@ -284,16 +430,21 @@ app.post("/api/contact", async (req, res) => {
       await sql`INSERT INTO emails (email, created_at) VALUES (${email}, NOW())`;
     }
 
-    // Create worker thread to send contact notification
-    createContactWorker({ email, name, phone, message })
-      .then((result) => {
-        console.log(`Contact email result: ${result}`);
+    // Trả về kết quả thành công ngay lập tức
+    res.status(200).json({ message: "Gửi tin nhắn thành công!!" });
+
+    // Sau đó mới bắt đầu gửi email thông báo trong nền
+    sendContactNotification({ email, name, phone, message })
+      .then((success) => {
+        console.log(
+          `Contact email sending process: ${success ? "Successful" : "Failed"}`
+        );
       })
       .catch((error) => {
-        console.error("Error sending contact notification:", error);
+        console.error(
+          `Unexpected error in contact notification process: ${error.message}`
+        );
       });
-
-    res.status(200).json({ message: "Gửi tin nhắn thành công!!" });
   } catch (error) {
     console.error("Error sending contact info:", error);
     res.status(500).json({ message: "Server error" });
