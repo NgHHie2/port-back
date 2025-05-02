@@ -1,9 +1,12 @@
 const { workerData, parentPort } = require("worker_threads");
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+const { Resend } = require("resend");
 
 // Get data from main thread
 const { contactData, emailConfig } = workerData;
+
+const resend = new Resend(process.env.API_MAIL);
 
 // Main function to send contact notification
 async function sendContactNotification() {
@@ -12,33 +15,9 @@ async function sendContactNotification() {
       `Starting to send contact notification from: ${contactData.email}`
     );
 
-    // Create email transporter
-    const transporter = nodemailer.createTransport({
-      host: emailConfig.host,
-      port: emailConfig.port,
-      secure: false,
-      auth: {
-        user: emailConfig.user,
-        pass: emailConfig.pass,
-      },
-    });
-
-    await new Promise((resolve, reject) => {
-      // verify connection configuration
-      transporter.verify(function (error, success) {
-        if (error) {
-          console.log(error);
-          reject(error);
-        } else {
-          console.log("Server is ready to take our messages");
-          resolve(success);
-        }
-      });
-    });
-
     // Create email content
     const mailOptions = {
-      from: `"Real Estate Website" <${emailConfig.user}>`,
+      from: `"Hòa Nguyễn BĐS" <${emailConfig.user}>`,
       to: emailConfig.receiver,
       subject: "Có người liên hệ từ website",
       html: `
@@ -68,18 +47,21 @@ async function sendContactNotification() {
     };
 
     // Send email
-    await new Promise((resolve, reject) => {
-      transporter.sendMail(mailOptions, (err, info) => {
-        if (err) {
-          console.error(err);
-          reject(err);
-        } else {
-          console.log(info);
-          resolve(info);
-        }
+    // Send email
+    (async function () {
+      const { data, error } = await resend.emails.send({
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        html: mailOptions.html,
       });
-    });
 
+      if (error) {
+        return console.error({ error });
+      }
+
+      console.log({ data });
+    })();
     parentPort.postMessage("Contact notification email sent successfully");
   } catch (error) {
     parentPort.postMessage(
